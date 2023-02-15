@@ -1,9 +1,15 @@
 local cfg = {}
+cfg.baseUrl = "https://codestats.net/api/"
+cfg.token = plugin:GetSetting("Token") or ""
+
+local currentdata = {}
+currentdata.xp = 0
+
+local http = game:GetService("HttpService")
 
 local toolbar = plugin:CreateToolbar("Code::Stats")
 
 local widgetbtn = toolbar:CreateButton("Toggle Widget", "Toggles visiblity of Code::Stats widget", "rbxassetid://12474703887")
-
 widgetbtn.ClickableWhenViewportHidden = true
 
 local widgetinfo = DockWidgetPluginGuiInfo.new(
@@ -14,6 +20,16 @@ local widgetinfo = DockWidgetPluginGuiInfo.new(
 	150,
 	150,
 	150
+)
+
+local tokenwidgetinfo = DockWidgetPluginGuiInfo.new(
+	Enum.InitialDockState.Float,
+	false,
+	false,
+	300,
+	200,
+	300,
+	200
 )
 
 local studio = settings().Studio
@@ -29,54 +45,48 @@ widgetbtn.Click:Connect(function()
 	widget.Enabled = not widget.Enabled
 end)
 
-local tokenbtn = toolbar:CreateButton("Set Token", "Sets the machine token to send the xp to", "rbxassetid://12489849699")
-
-tokenbtn.ClickableWhenViewportHidden = true
-
-local tokenwidgetinfo = DockWidgetPluginGuiInfo.new(
-	Enum.InitialDockState.Float,
-	false,
-	false,
-	300,
-	200,
-	300,
-	200
-)
-
 local tokenwidget = plugin:CreateDockWidgetPluginGui("C::S Token Setter", tokenwidgetinfo)
 tokenwidget.Title = "Set Code::Stats Token"
 
-local tokenbox = Instance.new("TextBox")
-tokenbox.Size = UDim2.fromScale(1, 1)
-tokenbox.BackgroundTransparency = 1
-tokenbox.TextScaled = true
-tokenbox.Font = Enum.Font.Ubuntu
-tokenbox.PlaceholderText = "Token goes here"
-
-tokenbox.FocusLost:Connect(function(entered)
-	if not entered then
-		return
-	end
-	tokenwidget.Enabled = false
-	local text = tokenbox.Text
-	tokenbox.Text = ""
-	cfg.token = text
-	plugin:SetSetting("Token", text)
-end)
+local tokenbtn = toolbar:CreateButton("Set Token", "Sets the machine token to send the xp to", "rbxassetid://12489849699")
+tokenbtn.ClickableWhenViewportHidden = true
 
 tokenbtn.Click:Connect(function()
 	tokenwidget.Enabled = true
 end)
 
-tokenbox.Parent = tokenwidget
+local tokenbox = Instance.new("TextBox")
+do
+	tokenbox.Size = UDim2.fromScale(1, 1)
+	tokenbox.BackgroundTransparency = 1
+	tokenbox.TextScaled = true
+	tokenbox.Font = Enum.Font.Ubuntu
+	tokenbox.PlaceholderText = "Token goes here"
+	tokenbox.Text = ""
+	tokenbox.FocusLost:Connect(function(entered)
+		if not entered then
+			return
+		end
+		tokenwidget.Enabled = false
+		local text = tokenbox.Text
+		tokenbox.Text = ""
+		cfg.token = text
+		plugin:SetSetting("Token", text)
+	end)
+
+	tokenbox.Parent = tokenwidget
+end
 
 local count = Instance.new("TextLabel")
-count.Text = "0"
+do
+	count.Text = "0"
+	count.Size = UDim2.fromScale(1, 1)
+	count.BackgroundTransparency = 1
+	count.TextScaled = true
+	count.Font = Enum.Font.Ubuntu
 
-count.Size = UDim2.fromScale(1, 1)
-count.BackgroundTransparency = 1
-count.TextScaled = true
-count.Font = Enum.Font.Ubuntu
+	count.Parent = widget
+end
 
 local function getcolors()
 	return theme:GetColor(colors.MainText), theme:GetColor(colors.MainBackground), theme:GetColor(colors.DimmedText)
@@ -95,21 +105,11 @@ end
 
 synctheme()
 
-count.Parent = widget
 studio.ThemeChanged:Connect(synctheme)
 
-cfg.baseUrl = "https://codestats.net/api/"
-cfg.token = plugin:GetSetting("Token") or ""
-
-local function isTokenValid()
+local function validtoken()
 	return not (not cfg.token or cfg.token == "" or not cfg.token:match("(%w+)%.(%w+)%.(%w+)"))
 end
-
-local function url(suffix)
-	return cfg.baseUrl .. suffix
-end
-
-local http = game:GetService("HttpService")
 
 local function request(options)
 	local s, res = pcall(function()
@@ -122,7 +122,7 @@ local function request(options)
 	return res
 end
 
-local function timeStamp()
+local function timestamp()
 	local off = tonumber(os.date("%z"))
 	if not off then
 		error("Could not get timezone offset.")
@@ -132,9 +132,12 @@ local function timeStamp()
 	return os.date("%Y-%m-%dT%H:%M:%S") .. prefix .. os.date("%H:%M", 21600 + off)
 end
 
+local function url(suffix)
+	return cfg.baseUrl .. suffix
+end
 
-local function sendPulse(amt, timestamp)
-	if not isTokenValid() then
+local function sendpulse(amt, timestamp)
+	if not validtoken() then
 		error("Invalid token.")
 	end
 	amt = math.round(amt)
@@ -167,38 +170,32 @@ local function sendPulse(amt, timestamp)
 	return true
 end
 
-local currentdata = {}
-
-currentdata.xp = 0
-
-local function pulseColor(col)
+local function pulsecolor(col)
 	count.TextColor3 = col
 	resettween:Cancel()
 	resettween:Play()
 end
 
-local function updateCount()
+local function updatecount()
 	count.Text = tostring(currentdata.xp)
 end
 
 task.defer(function()
 	while true do
 		task.wait(10)
-		if currentdata.xp > 0 and isTokenValid() then
-			if sendPulse(currentdata.xp, timeStamp()) then
+		if currentdata.xp > 0 and validtoken() then
+			if sendpulse(currentdata.xp, timestamp()) then
 				currentdata.xp = 0
-				updateCount()
-				pulseColor(Color3.new(0, 1, 0))
+				updatecount()
+				pulsecolor(Color3.new(0, 1, 0))
 			else
-				pulseColor(Color3.new(1, 0, 0))
+				pulsecolor(Color3.new(1, 0, 0))
 			end
-		else
-			pulseColor(Color3.new(1, 0, 0))
 		end
 	end
 end)
 
 game:GetService("ScriptEditorService").TextDocumentDidChange:Connect(function(doc, changes)
 	currentdata.xp += 1
-	updateCount()
+	updatecount()
 end)
