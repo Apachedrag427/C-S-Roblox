@@ -62,6 +62,7 @@ do
 	tokenbox.TextScaled = true
 	tokenbox.Font = Enum.Font.Ubuntu
 	tokenbox.PlaceholderText = "Token goes here"
+	tokenbox.Text = ""
 	tokenbox.FocusLost:Connect(function(entered)
 		if not entered then
 			return
@@ -73,7 +74,6 @@ do
 		plugin:SetSetting("Token", text)
 	end)
 
-	tokenbox.Text = ""
 	tokenbox.Parent = tokenwidget
 end
 
